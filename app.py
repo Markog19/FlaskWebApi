@@ -1,11 +1,15 @@
 from flask import Flask
+from flask.json import dump
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Date
 from sqlalchemy.sql.sqltypes import Boolean, DateTime
 from flask import Flask,request,jsonify
 from werkzeug.security import generate_password_hash,check_password_hash
+from sqlalchemy import update
+
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'thisissecret'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root@localhost/testnabaza'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -54,9 +58,22 @@ def login():
 
 
 
-@app.route('/index',methods=['GET'])
+@app.route('/index/',methods=['GET'])
 def get_users():
-    return
+    output = []
+    uvjet = request.get_json()
+    korisnici = Korisnik.query.all()
+    for korisnik in korisnici:
+        data = {}
+        data['ime'] = korisnik.ime
+        data['prezime'] = korisnik.prezime
+        data['email'] = korisnik.email
+        data['korisnicko_ime'] = korisnik.korisnicko_ime
+        data['lozinka'] = korisnik.lozinka
+        data['status'] = korisnik.status
+        output.append(data)
+   
+    return jsonify({'users' : output})
 
 
 
@@ -66,15 +83,34 @@ def get_users():
 
 @app.route('/user',methods=['PUT'])
 def update_user():
-    return
+    data = request.get_json()
+    trenutniKorisnik = Korisnik.query.filter_by(ime = data['ime']).first()
+    if not trenutniKorisnik:
+        return jsonify({"Poruka":"Korisnik ne postoji"})
+    if(check_password_hash(trenutniKorisnik.lozinka,data['stara_lozinka'])):
+        if(data['nova_lozinka'] == data['potvrdi_novu']):
+            db.session.query(Korisnik).filter(Korisnik.ime == data['ime']).update({Korisnik.lozinka:generate_password_hash(data['nova_lozinka'])},synchronize_session=False)           
+        else:
+            return jsonify({"Poruka":"Lozinke nisu iste"})
+    else:
+        return jsonify({"Poruka":"Pogresna Lozinka"})
+    
+    db.session.commit()        
+
+
+   
+
+    return jsonify({
+        "poruka":"Uspjesno"
+    })
 
 
 @app.route('/activites',methods=['GET'])
 def get_activities():
     return
 
-@app.route('/')
+@app.route('/home')
 def homepage():
-    return 'hello world'
+    return jsonify({"data":"data"})
 if __name__ =="__main__":
     app.run(debug = True,host='localhost',threaded=True)
