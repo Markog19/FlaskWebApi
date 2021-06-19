@@ -6,6 +6,8 @@ from sqlalchemy.sql.sqltypes import Boolean, DateTime
 from flask import Flask,request,jsonify
 from werkzeug.security import generate_password_hash,check_password_hash
 from sqlalchemy import update
+from datetime import datetime
+
 
 
 app = Flask(__name__)
@@ -25,11 +27,16 @@ class Korisnik(db.Model):
 
 
 
+
 class Aktivnost(db.Model):
     id = Column(Integer,primary_key=True)
     vrijeme = Column(DateTime)
     trajanje = Column(Integer)
     ruta = Column(String(50))
+def fillTable(route):
+    novaAktivnost = Aktivnost(vrijeme=datetime.now(), ruta = route )
+
+
 
 @app.route('/register',methods=['POST'])
 def create_user():
