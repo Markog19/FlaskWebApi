@@ -1,4 +1,4 @@
-from flask import Flask,g
+from flask import Flask
 from flask.json import dump
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Column, Integer, String, ForeignKey, Date
@@ -10,6 +10,7 @@ import jwt
 from datetime import date, datetime, timedelta
 from functools import wraps
 import time
+import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'thisissecret'
@@ -51,66 +52,87 @@ def token_required(f):
             return jsonify({"poruka":"Nepravilan token"}),401
         return f(trenutni_korisnik,*args,**kwargs)
     return decorated
-def fillTable(route,id):
-    novaAktivnost = Aktivnost(id_korisnika = id, vrijeme=datetime.now(),trajanje = 2,ruta = route)
+def fillTable(route,id,f):
+    novaAktivnost = Aktivnost(id_korisnika = id, vrijeme=datetime.now(),trajanje = f,ruta = route)
     db.session.add(novaAktivnost)
     db.session.commit()
+    return jsonify({"Poruka":"Tablica ispunjena"})
+
+
 
 
 @app.route('/register',methods=['POST'])
 def create_user():
+    start_time = datetime.now()
     data = request.get_json()
     hashed_password = generate_password_hash(data['lozinka'],method='sha256')
     novi_korisnik = Korisnik(ime = data['ime'], prezime = data['prezime'], email = data['email'], korisnicko_ime = data['korisnicko_ime'], lozinka = hashed_password,status = False)
     db.session.add(novi_korisnik)
     db.session.commit()
-    fillTable("/register",novi_korisnik.id)
+    end_time = datetime.now()
+    fillTable("/register",novi_korisnik.id,end_time-start_time)
     return jsonify({'poruka':'Korisnik uspjesno kreiran'})
-
 @app.route('/user/activate',methods=['PUT'])
 @token_required
 def activate_user(trenutni_korisnik):
+    start_time = time.time()
     if not trenutni_korisnik or trenutni_korisnik.status:
-        fillTable("/user/activate",trenutni_korisnik.id)
+        end_time = time.time()
+        fillTable("/user/activate",trenutni_korisnik.id,end_time-start_time)
         return jsonify({"Poruka":"Pogreska"})
     db.session.query(Korisnik).filter(Korisnik.ime == trenutni_korisnik.ime).update({Korisnik.status:True},synchronize_session=False)           
-    db.session.commit()   
-    fillTable("/user/activate",trenutni_korisnik.id)
+    db.session.commit()
+    end_time = time.time()   
+    fillTable("/user/activate",trenutni_korisnik.id,end_time-start_time)
      
     return jsonify({"Poruka":trenutni_korisnik.ime})
-
 
 
 @app.route('/user',methods=['DELETE'])
 @token_required
 def delete_user(trenutni_korisnik):
+    start_time = time.time()
+
     if not trenutni_korisnik or not trenutni_korisnik.status:
-        return jsonify({"Poruka":"Pogreska"})
+        end_time = time.time()
+        fillTable("/user",trenutni_korisnik.id,end_time-start_time)     
+        return jsonify({"Poruka":"Pogreska","trajanje":end_time-start_time})
+    
+
     db.session.query(Korisnik).filter(Korisnik.ime == trenutni_korisnik.ime).update({Korisnik.status:False},synchronize_session=False)           
-    db.session.commit()        
-    return jsonify({"Poruka":trenutni_korisnik.ime})
+    db.session.commit()   
+    end_time = time.time()
+    fillTable("/user",trenutni_korisnik.id,end_time-start_time)     
+    return jsonify({"Poruka":trenutni_korisnik.ime,"Time":str(end_time-start_time)})
 
 
 
 
 @app.route('/login',methods=['GET'])
 def login():
+    start_time = time.time()
     auth = request.authorization
 
     if not auth or not auth.username or not auth.password:
         return jsonify({"Poruka":"Pogreska"})
     korisnik = Korisnik.query.filter_by(ime = auth.username).first()
     if not korisnik.status:
+        end_time = time.time()
+        fillTable("/login",korisnik.id,end_time - start_time)
+
         return jsonify({"poruka":"Status korisnika je 0, login nije moguc"})
     if not korisnik:
+        end_time = time.time()
+        fillTable("/login",korisnik.id,end_time - start_time)
+
         return jsonify({"Poruka":"Pogreska"})
     if check_password_hash(korisnik.lozinka, auth.password):
         token = jwt.encode({'id': korisnik.id, 'exp':datetime.utcnow() + timedelta(hours=10)},app.config['SECRET_KEY'],algorithm="HS256")
+        end_time = time.time()
+        fillTable("/login",korisnik.id,end_time - start_time)
 
         return jsonify({"token": token})
     
-    return jsonify({"Poruka":"Pogreska"})
-
 
 
 @app.route('/index/',methods=['GET'])
@@ -163,7 +185,7 @@ def update_user():
             fillTable("/user")
             return jsonify({"Poruka":"Lozinke nisu iste"})
     else:
-        fillTable("/user")
+        fillTable("/user",trenutniKorisnik.id)
         return jsonify({"Poruka":"Pogresna Lozinka"})
     
     db.session.commit()        
@@ -172,11 +194,57 @@ def update_user():
         "poruka":"Uspjesno"
     })
 
+def get_paginated_list(results, url, start, limit,per_page):
+    start = int(start)
+    limit = int(limit)
+    count = len(results)
+    if  limit < 0:
+        return jsonify({"Poruka":"Ne postoji vise unosa"})
+    # make response
+    obj = {}
+    obj['start'] = start
+    obj['limit'] = limit
+    obj['count'] = count
+    # make URLs
+    # make previous url
+    if start == 1:
+        obj['previous'] = ''
+    else:
+        start_copy = max(1, start - limit)
+        limit_copy = start - 1
+        obj['previous'] = url + '/%d/%d' % (start_copy, limit_copy)
+    # make next url
+    if start  > count:
+        obj['next'] = ''
+    else:
+        start_copy = start + per_page
+        obj['next'] = url + '/%d/%d' % (start_copy, limit+per_page)
+    # finally extract result according to bounds
+    obj['results'] = results[(start - 1):(start - 1 + limit)]
+    return obj
 
-@app.route('/activites',methods=['GET'])
-def get_activities():
+@app.route('/activites/<int:start>/<int:limit>',methods=['GET'])
+def get_activities(start,limit):
+    podatci = request.get_json()
+    output = []
+    aktivnosti = Aktivnost.query.filter_by(id_korisnika = podatci['id'])
+    korisnici = Korisnik.query.filter_by(id = podatci['id'])
+    for korisnik in korisnici:
+        
+        for aktivnost in aktivnosti:
+            data = {}
+            data['ime'] = korisnik.ime
+            
+            data['id_korisnika'] = aktivnost.id_korisnika
+            data['vrijeme'] = aktivnost.vrijeme
+            data['trajanje'] = aktivnost.trajanje
+            data['ruta'] = aktivnost.ruta
+            output.append(data)
+        if(start>len(output)):
+            return jsonify({"Poruka":"Ne postoji vise unosa"})
 
-    return
+
+    return jsonify({"Output":get_paginated_list(output,"/activites",start,limit,per_page=5)})
 
 @app.route('/home')
 def homepage():
