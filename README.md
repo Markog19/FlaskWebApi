@@ -55,3 +55,8 @@
         Pomoću start i page_size parametara napraviti paginaciju
 
         Voditi računa da se u responsu prikaže i ime korisnika, a ne samo id korisnika
+9. Testovi
+        - create_user - gotovo
+        - update_user - gotovo
+        - activate_user - gotovo
+        - deactivate_user - gotovo

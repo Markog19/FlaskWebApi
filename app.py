@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import session
+from sqlalchemy.sql.expression import null
 from sqlalchemy.sql.sqltypes import Boolean, DateTime, Float
 from flask import Flask,request,jsonify
 from werkzeug.security import generate_password_hash,check_password_hash
@@ -9,6 +10,8 @@ from datetime import datetime, timedelta
 from functools import wraps
 import time
 import models 
+import numpy as np
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'thisissecret'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root@localhost/testnabaza'
@@ -42,14 +45,11 @@ def fillTable(route,id,f):
 
 @app.route('/register',methods=['POST'])
 def create_user():
-    start_time = datetime.now()
     data = request.get_json()
     hashed_password = generate_password_hash(data['lozinka'],method='sha256')
     novi_korisnik = models.Korisnik(ime = data['ime'], prezime = data['prezime'], email = data['email'], korisnicko_ime = data['korisnicko_ime'], lozinka = hashed_password,status = True)
     db.session.add(novi_korisnik)
     db.session.commit()
-    end_time = datetime.now()
-    fillTable("/register",novi_korisnik.id,end_time-start_time)
     return jsonify({'poruka':'Korisnik uspjesno kreiran'})
 @app.route('/user/activate',methods=['PUT'])
 @token_required
@@ -122,7 +122,9 @@ def get_users():
     uvjet = request.get_json()
     korisnici = None
     korisnik = None
-    if uvjet['filter'] =="ime":
+    if uvjet==None:
+        korisnici = models.Korisnik.query.all()
+    elif uvjet['filter'] =="ime":
         korisnici = models.Korisnik.query.filter_by(ime = uvjet['search'])
     elif uvjet['filter'] == "prezime":
         korisnici = models.Korisnik.query.filter_by(prezime = uvjet['search'])
@@ -134,7 +136,7 @@ def get_users():
         korisnici = models.Korisnik.query.filter_by(korisnicko_ime = uvjet['search'])
     elif uvjet['filter'] == "status":
         korisnici = models.Korisnik.query.filter_by(status = uvjet['search'])
-
+    
     for korisnik in korisnici:
         data = {
             "ime":korisnik.ime,
@@ -157,6 +159,8 @@ def get_users():
 
 @app.route('/user',methods=['PUT'])
 def update_user():
+    start_time = time.time()
+
     data = request.get_json()
     trenutniKorisnik = models.Korisnik.query.filter_by(ime = data['ime']).first()
     if not trenutniKorisnik:
@@ -168,11 +172,15 @@ def update_user():
             fillTable("/user")
             return jsonify({"Poruka":"Lozinke nisu iste"})
     else:
-        fillTable("/user",trenutniKorisnik.id)
+        end_time = time.time()
+
+        fillTable("/user",trenutniKorisnik.id,end_time-start_time)
         return jsonify({"Poruka":"Pogresna Lozinka"})
     
-    db.session.commit()        
-    fillTable("/user")
+    db.session.commit()   
+    end_time = time.time()
+     
+    fillTable("/user",trenutniKorisnik.id,end_time-start_time)
     return jsonify({
         "poruka":"Uspjesno"
     })

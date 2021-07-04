@@ -2,7 +2,8 @@ import flask
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.sql.sqltypes import Boolean, DateTime, Float
 from sqlalchemy import Column, Integer, String
-from app import db
+db = SQLAlchemy()
+
 class Korisnik(db.Model):
     id = Column(Integer,primary_key=True)
     ime = Column(String(50))
