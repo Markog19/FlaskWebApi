@@ -14,7 +14,14 @@ class ApiTest(unittest.TestCase):
         "ime":"Marko",
         "prezime":"Galic",
         "email":"Markog19@gmail.com",
-        "korisnicko_ime":"Markogalic112",
+        "korisnicko_ime":"Markogalic",
+        "lozinka":"1234"
+    }
+    fake_user = {
+        "ime":"Marko",
+        "prezime":"Galic",
+        "email":"Markog19@gmail.com",
+        "korisnicko_ime":"Mgalic",
         "lozinka":"1234"
     }
     update = {
@@ -28,22 +35,15 @@ class ApiTest(unittest.TestCase):
         response = tester.post("/register",json = ApiTest.user)
         statusCode = response.status_code
         self.assertEqual(statusCode,200)
-        return
+        
 
     def test_update_user(self):
         tester = app.test_client(self)
-        token = jwt.encode({
-            'id': 33, 
-            },
-            app.config['SECRET_KEY'],algorithm="HS256")  
-        headers = {
-            "x-access-token":token
-        }
-
-        response =  tester.put("/user",headers = headers,json = ApiTest.update)
+        
+        response =  tester.put("/user",json = ApiTest.update)
         statusCode = response.status_code
         self.assertEqual(statusCode,200)
-        return
+        
 
     def test_activate_user(self):
         tester = app.test_client(self)
@@ -74,6 +74,29 @@ class ApiTest(unittest.TestCase):
         statusCode = response.status_code
         self.assertEqual(statusCode,200)
      
-        return
+    def test_fail_deactivate_user(self):
+        tester = app.test_client(self)
+        response = tester.delete("/user")
+        statusCode = response.status_code
+        self.assertEqual(401,statusCode)
+
+    def test_fail_activate_user(self):
+        tester = app.test_client(self)
+        response = tester.put("/user/activate")
+        statusCode = response.status_code
+        self.assertEqual(401,statusCode)
+    
+    def test_fail_create_user(self):
+        tester = app.test_client(self)
+        response = tester.post("/register",json = ApiTest.fake_user)
+        statusCode = response.status_code
+        self.assertEqual(statusCode,500)
+    def test_fail_update_user(self):
+        tester = app.test_client(self)
+        response =  tester.put("/user",json = ApiTest.fake_user)
+        statusCode = response.status_code
+        self.assertEqual(statusCode,500)
+        
+        
 if __name__ == "__main__":      
     unittest.main()

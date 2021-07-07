@@ -1,47 +1,12 @@
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import session
-from sqlalchemy.sql.expression import null
-from sqlalchemy.sql.sqltypes import Boolean, DateTime, Float
-from flask import Flask,request,jsonify
+from flask import request,jsonify
 from werkzeug.security import generate_password_hash,check_password_hash
 import jwt
 from datetime import datetime, timedelta
 from functools import wraps
 import time
 import models 
-import numpy as np
-
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'thisissecret'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root@localhost/testnabaza'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.url_map.strict_slashes = False
-db = SQLAlchemy(app)
-
-
-
-def token_required(f):
-    @wraps(f)
-    def decorated(*args,**kwargs):
-        token = None
-        if 'x-access-token' in request.headers:
-            token = request.headers['x-access-token']
-        if not token:
-            return jsonify({"Poruka":"Token ne postoji"}),401
-        try:
-            data = jwt.decode(token,app.config['SECRET_KEY'],"HS256")
-            trenutni_korisnik = models.Korisnik.query.filter_by(id=data['id']).first()
-        except:
-            return jsonify({"poruka":"Nepravilan token"}),401
-        return f(trenutni_korisnik,*args,**kwargs)
-    return decorated
-def fillTable(route,id,f):
-    novaAktivnost = models.Aktivnost(id_korisnika = id, vrijeme=datetime.now(),trajanje = f,ruta = route)
-    db.session.add(novaAktivnost)
-    db.session.commit()
-    return jsonify({"Poruka":"Tablica ispunjena"})
-
+from init import db,app
+from utilities import token_required,fillTable
 
 @app.route('/register',methods=['POST'])
 def create_user():
@@ -68,7 +33,6 @@ def activate_user(trenutni_korisnik):
      
     return jsonify({"Poruka":trenutni_korisnik.ime})
 
-
 @app.route('/user',methods=['DELETE'])
 @token_required
 def delete_user(trenutni_korisnik):
@@ -78,7 +42,6 @@ def delete_user(trenutni_korisnik):
         end_time = time.time()
         fillTable("/user",trenutni_korisnik.id,end_time-start_time)     
         return jsonify({"Poruka":"Pogreska","trajanje":end_time-start_time})
-    
 
     db.session.query(models.Korisnik).filter(
         models.Korisnik.ime == trenutni_korisnik.ime).update(
@@ -87,7 +50,6 @@ def delete_user(trenutni_korisnik):
     end_time = time.time()
     fillTable("/user",trenutni_korisnik.id,end_time-start_time)     
     return jsonify({"Poruka":trenutni_korisnik.ime,"Time":str(end_time-start_time)})
-
 
 @app.route('/login',methods=['GET'])
 def login():
@@ -115,7 +77,6 @@ def login():
 
         return jsonify({"token": token})
     
-
 @app.route('/index',methods=['GET'])
 def get_users():
     output = []
@@ -150,8 +111,6 @@ def get_users():
         output.append(data)
    
     return jsonify({'users' : output})
-
-
 
 @app.route('/user',methods=['POST'])
 
@@ -216,8 +175,7 @@ def get_paginated_list(results, url, start, limit,per_page):
     obj['results'] = results[(start - 1):(start - 1 + limit)]
     return obj
 
-
-@app.route('/activites/<int:start>/<int:limit>',methods=['GET'])
+@app.route('/activities/<int:start>/<int:limit>',methods=['GET'])
 def get_activities(start,limit):
     podatci = request.get_json()
     output = []
